@@ -18,18 +18,7 @@ export default function Header({ testName, setTestName, ...props }) {
                 </div>
             </div>
 
-            {/* <div class="pb-3 pt-0 mt-0">
-                <div class="container">
-                    <div class="w-75 p-2 mx-auto" >
-                        <div class="form-group">
-                            <label for="exampleInputDescription1">Описание</label>
-                            <input type="text"
-                                className="form-control form-control-sm"
-                                id="exampleInputDescription1" placeholder="Введите описание теста" />
-                        </div>
-                    </div>
-                </div>
-            </div> */}
+            
         </div>
 
     );

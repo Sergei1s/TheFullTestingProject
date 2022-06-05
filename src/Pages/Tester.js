@@ -1,42 +1,80 @@
 import 'bootstrap/dist/css/bootstrap.min.css'
-import { Button } from 'react-bootstrap'
+import { Button, Container } from 'react-bootstrap'
 import TestingCard from '../Components/TestingCard';
 import Header from '../Components/Header';
-import { Container, Card, CardImg, CardProps, CardGroup, CarouselItem, Col, Row } from 'react-bootstrap';
 import { useState, useEffect } from 'react'
-import { useParams } from "react-router-dom";
-import { Link } from "react-router-dom";
-import { host } from "../API"
+import { Link, useParams } from "react-router-dom";
+import { host } from "../Api/API"
 
-
-const modifySignature = (questions) => {
+// Добвляет к каждому ответу флаг correct
+// correct := (answerSelected == isRightAnswer)
+// Корректный ответ это правильный выбранный или неправильный невыбранный ответ.
+// Правильный ответ это ответ указанный автором теста.
+// Выбранный ответ это ответ указанный пользователем.
+const withCorrectFlag = (questions) => {
     questions.forEach(question => {
         question.answers.forEach(answer => {
+            // По умолчанию ни один ответ не выбран
+            // По этому для невыбранных ответов будут корректны неправильные
             answer.correct = !answer.isRightAnswer;
         })
     });
     return questions;
-    // return questions.map(question => {
-    //     return {
-    //         ...question, answers: question.answers.map(answer => {
-    //             return {
-    //                 ...answer,
-    //                 isRightAnswer: false
-    //             }
-    //         })
-    //     }
-    // });
 }
 
+// Страница прохождения теста
 export const Tester = ({ testId, ...props }) => {
 
+    // Сотояния компонета
     const [testPassed, setTestPassed] = useState(false);
     const [testResult, setTestResult] = useState("");
     const [testName, setTestName] = useState("Loading...");
     const [questions, setQuestions] = useState([]);
-    const [error, setError] = useState(undefined);
+    const [error, setError] = useState(undefined); // Ошибки при загрузке теста
+
+    // Параметр указанный в url страницы (номер теста)
     const { id } = useParams();
 
+    // Загружаем тест через fetch запрос к api при открытии страницы
+    useEffect(() => {
+        // Отправка запроса к api для получения теста по номеру
+        fetch(host + "passageTest/" + id)
+            .then(resp => {
+                // Обработка ответа от api
+                if (resp.ok) { // Если код ответа от api: 200 OK
+                    resp.json().then(testResponse => {
+                        // Устанавливаем новые состояния для теста
+                        setTestName(testResponse.testName);
+                        setQuestions(withCorrectFlag(testResponse.questions));
+                        setError(undefined); // Очищаем ошибки
+                    });
+                } else {
+                    // Теста с таким номером не существует в базе данных
+                    setError("Test not found.");
+                }
+            })
+            .catch(err => {
+                // При возникновении ошибка в api
+                setError("Api error.");
+                console.log(err);
+            })
+    }, []);
+
+    // В случе ошибки показываем сообщение с её текстом
+    if (error) {
+        return (
+            <div className="text-center mt-4 pt-5  mb-5">
+                <h1>{error}</h1>
+                <Link to="/" >
+                    <Button variant="primary" className="mt-4  mb-5" size="lg" >
+                        Вернуться
+                    </Button>
+                </Link>
+            </div>
+        );
+    }
+
+    // Возвращяет число вопросов, на которые были даны правильные ответы
     const checkAnswers = () => {
         let correctlyAnswers = 0;
         questions.forEach(question => {
@@ -47,52 +85,15 @@ export const Tester = ({ testId, ...props }) => {
         return correctlyAnswers;
     }
 
-    // Загружаем тест через fetch запрос к api
-    useEffect(() => {
-        fetch(host + "passageTest/" + id)
-            .then(resp => {
-                if (resp.ok) {
-                    resp.json().then(test => {
-                        setTestName(test.testName);
-                        setQuestions(modifySignature(test.questions));
-                        setError(undefined);
-
-
-                    });
-                } else {
-                    setError("Test not found.")
-
-                }
-            })
-            .catch(err => {
-                setError("Api error.3");
-                console.log(err);
-            })
-    }, []);
-
-    // Получаем резульаты теста через запрос к api
+    // Провека теста
     const submitTest = () => {
-        console.log(questions);
-        const correctlyAnswers = checkAnswers();
-        const totalQuestons = questions.length;
-        setTestResult("Вы правильно ответили на " + correctlyAnswers + " из " + totalQuestons);
+        const correctlyAnswersCount = checkAnswers();
+        const totalQuestionsCount = questions.length;
+        setTestResult("Вы правильно ответили на " + correctlyAnswersCount + " из " + totalQuestionsCount);
         setTestPassed(true);
     }
-    if (error) {
-        return (
-            // TODO: Decorate
-            <div className="text-center mt-4 pt-5  mb-5">
-                <h1>{error}</h1>
-                <Link to="/" >
-                    <Button variant="primary" className="mt-4  mb-5" size="lg" >
-                        Вернуться
-                    </Button>
-                </Link>
-            </div>
 
-
-        );
-    }
+    // Компонент реузльтатов теста
     const testResultElement = () => {
         return (
             <div className="text-center mt-4 pt-5  mb-5">
@@ -105,6 +106,8 @@ export const Tester = ({ testId, ...props }) => {
             </div>
         );
     }
+
+    // Кнопка "Завершить работу"
     const submitTestElement = () => {
         return (
             <div className="text-center mt-4  mb-5">
@@ -114,16 +117,17 @@ export const Tester = ({ testId, ...props }) => {
             </div>
         );
     }
+
     return (
         < Container >
             <div className="mx-auto">
                 <Header testName={testName} />
-
-                <TestingCard testPassed={testPassed} questions={questions} setQuestions={setQuestions} />
-                {testPassed && testResultElement()}
+                <TestingCard testPassed={testPassed} questions={questions} />
+                {/* Если тест не закончен, тогда показывем кнопку завершения теста */}
                 {!testPassed && submitTestElement()}
+                {/* Если тест закончен, тогда показывем результат прохождения теста */}
+                {testPassed && testResultElement()}
             </div>
         </Container >
-
     )
 }
